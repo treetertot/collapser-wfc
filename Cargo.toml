@@ -1,0 +1,12 @@
+[package]
+name = "collapser-wfc"
+version = "0.1.0"
+authors = ["Joshua Narayana <europajuice@gmail.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+collapser = {path = "../collapser"}
+serde = {version = "1", features = ["derive"]}
+rand = "0.8.3"
