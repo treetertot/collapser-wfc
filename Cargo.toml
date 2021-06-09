@@ -7,6 +7,6 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-collapser = {path = "../collapser"}
+collapser = {git = "https://github.com/treetertot/collapser.git", branch = "main"}
 serde = {version = "1", features = ["derive"]}
 rand = "0.8.3"
