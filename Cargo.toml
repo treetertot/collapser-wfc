@@ -8,5 +8,4 @@ edition = "2018"
 
 [dependencies]
 collapser = {git = "https://github.com/treetertot/collapser.git", branch = "main"}
-serde = {version = "1", features = ["derive"]}
 rand = "0.8.3"

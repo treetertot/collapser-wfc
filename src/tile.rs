@@ -1,96 +1,70 @@
-use std::cmp::Ordering::*;
+use std::ops::Deref;
+use std::slice::from_ref;
 
-use collapser::cell::{
-    Collapseable::{self, *},
-    Neighbors, Superposition,
-};
+use collapser::cell::Working;
 
-use crate::rules::{direction_rules, relevant_rules, Direction, Rule, Rules};
+use crate::rules::Rules;
 
 use rand::prelude::*;
 
 pub type TileID = u16;
 
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct SuperTile(pub Vec<TileID>);
-impl SuperTile {
-    fn rm_impossible(&mut self, other: &[TileID], side: Direction, rules: &[Rule]) -> bool {
-        let mut changed = false;
-        let rules = direction_rules(rules, side.invert());
-        let mut dir_possibilities: Vec<_> = other
-            .iter()
-            .map(|&origin| relevant_rules(origin, rules))
-            .flatten()
-            .map(|rule| rule.second)
-            .collect();
-        dir_possibilities.sort_unstable();
-        dir_possibilities.dedup();
-        let self_copy = self.0.clone();
-        let (mut selfiter, mut otheriter) = (self_copy.iter().enumerate(), other.iter());
-        let mut removed = 0;
-        while let (Some((i, left)), Some(right)) = (selfiter.next(), otheriter.next()) {
-            match left.cmp(right) {
-                Equal => (),
-                Less => {
-                    changed = true;
-                    self.0.remove(i - removed);
-                    removed += 1;
-                    while let Some((i, left)) = selfiter.next() {
-                        if left < right {
-                            self.0.remove(i - removed);
-                            removed += 1;
-                        } else {
-                            break;
-                        }
-                    }
-                }
-                Greater => {
-                    while let Some(right) = otheriter.next() {
-                        if left <= right {
-                            break;
-                        }
-                    }
-                }
-            }
-        }
-        changed
+impl Deref for SuperTile {
+    type Target = [TileID];
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
     }
 }
-impl Superposition for SuperTile {
+impl Working for SuperTile {
     type Tile = TileID;
     type Rules = Rules;
+    type Grabber = [(i32, i32); 8];
 
-    fn refine(
-        &mut self,
-        sides: Neighbors<Collapseable<&Self::Tile, &Self>>,
-        rules: &Self::Rules,
-    ) -> Result<Self::Tile, bool> {
-        let changed = match sides.top {
-            Collapsed(&0) => false,
-            Collapsed(&t) => self.rm_impossible(&[t], Direction::Up, rules),
-            Superimposed(other) => self.rm_impossible(&other.0, Direction::Up, rules),
-        } || match sides.bottom {
-            Collapsed(&0) => false,
-            Collapsed(&t) => self.rm_impossible(&[t], Direction::Down, rules),
-            Superimposed(other) => self.rm_impossible(&other.0, Direction::Down, rules),
-        } || match sides.left {
-            Collapsed(&0) => false,
-            Collapsed(&t) => self.rm_impossible(&[t], Direction::Left, rules),
-            Superimposed(other) => self.rm_impossible(&other.0, Direction::Left, rules),
-        } || match sides.right {
-            Collapsed(&0) => false,
-            Collapsed(&t) => self.rm_impossible(&[t], Direction::Right, rules),
-            Superimposed(other) => self.rm_impossible(&other.0, Direction::Right, rules),
-        };
+    const NEIGHBORS: Self::Grabber = [(-1, -1), (0, -1), (1, -1), (1, 0), (1, 1), (0, 1), (-1, 1), (-1, 0)];
+
+    fn new(rules: &Self::Rules) -> Self {
+        let mut possible: Vec<_> = rules.iter()
+            .map(|r| {
+                r.center
+            })
+            .collect();
+        possible.dedup();
+        possible.shrink_to_fit();
+        SuperTile(possible)
+    }
+    
+    fn refine(&mut self, neighbors: &[Result<&Self::Tile, &Self>], rules: &Self::Rules) -> Result<Self::Tile, bool> {
+        let mut iter = neighbors.iter().map(|r| match r {
+            Ok(0) => &[],
+            Ok(n) => from_ref(*n),
+            Err(poss) => &poss.0
+        });
+        let neighbors = [
+            iter.next().unwrap(),
+            iter.next().unwrap(),
+            iter.next().unwrap(),
+            iter.next().unwrap(),
+            iter.next().unwrap(),
+            iter.next().unwrap(),
+            iter.next().unwrap(),
+            iter.next().unwrap(),
+        ];
+        let start_len = self.0.len();
+        self.0.retain(|&n| {
+            let sub_rules = rules.rules_for(n);
+            sub_rules.iter()
+                .any(|r| r.eval(&neighbors))
+        });
         match self.0.len() {
-            0 => Ok(0),
-            1 => Ok(self.0[0]),
-            _ => Err(changed),
+            0 | 1 => Ok(self.0.pop().unwrap_or(0)),
+            n => Err(n != start_len)
         }
     }
-
-    fn reduce(&mut self) {
-        let to_rm = thread_rng().gen_range(0..self.0.len());
-        self.0.remove(to_rm);
+    fn force_collapse(&self) -> Self::Tile {
+        let i = rand::thread_rng().gen_range(0..self.0.len());
+        self.0.get(i).map(|&i| i).unwrap_or(0)
     }
 }

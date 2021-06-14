@@ -1,145 +1,76 @@
-use crate::tile::{SuperTile, TileID};
-use std::{
-    iter,
-    ops::{Deref, Range},
-};
-
-use serde::Deserialize;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub enum Direction {
-    Up,
-    Down,
-    Left,
-    Right,
-}
-impl Direction {
-    pub fn invert(&self) -> Self {
-        use Direction::*;
-        match self {
-            Up => Down,
-            Down => Up,
-            Left => Right,
-            Right => Left,
-        }
-    }
-}
+use crate::tile::TileID;
+use std::ops::Deref;
 
 /// A possible configuration
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Rule {
-    /// The direction that second is from origin
-    pub direction: Direction,
-    pub origin: TileID,
-    pub second: TileID,
+    pub center: TileID,
+    pub around: [TileID; 8],
+}
+impl Rule {
+    pub fn new(pattern: [TileID; 9]) -> Self {
+        Rule {
+            center: pattern[4],
+            around: [pattern[6], pattern[7], pattern[8], pattern[5], pattern[2], pattern[1], pattern[0], pattern[3]]
+        }
+    }
+    pub fn eval(&self, neighbors: &[&[TileID]; 8]) -> bool {
+        self
+            .around
+            .iter()
+            .zip(neighbors)
+            .filter(|(_, n)| n.len() > 0)
+            .all(|(target, list)| list.binary_search(target).is_ok())
+    }
+}
+#[test]
+fn construct() {
+    let pattern = [
+        1, 2, 3,
+        4, 5, 6,
+        7, 8, 9
+    ];
+    assert_eq!(Rule::new(pattern), Rule{center: 5, around: [7, 8, 9, 6, 3, 2, 1, 4]})
+}
+#[test]
+fn matching() {
+    let pattern = [
+        1, 2, 3,
+        4, 5, 6,
+        7, 8, 9
+    ];
+    let rule = Rule::new(pattern);
+    let ns = [&[7][..], &[8], &[9], &[6], &[3], &[2], &[1], &[4]];
+    assert!(rule.eval(&ns));
+    let ns = [&[7][..], &[8], &[9], &[6], &[3], &[2], &[1], &[5]];
+    assert!(!rule.eval(&ns));
 }
 
-#[derive(Debug, Deserialize)]
-pub struct TileCfg {
-    id: TileID,
-    above: Vec<TileID>,
-    below: Vec<TileID>,
-    left: Vec<TileID>,
-    right: Vec<TileID>,
-}
-
+#[derive(Debug, Clone)]
 pub struct Rules(Vec<Rule>);
 impl Rules {
-    pub fn new<L: IntoIterator<Item = TileCfg>>(rules: L) -> Self {
-        let mut inside: Vec<_> = rules
-            .into_iter()
-            .map(|tile| {
-                let origin = tile.id;
-                tile.above
-                    .into_iter()
-                    .map(move |second| {
-                        iter::once(Rule {
-                            origin,
-                            second,
-                            direction: Direction::Up,
-                        })
-                        .chain(iter::once(Rule {
-                            origin: second,
-                            second: origin,
-                            direction: Direction::Down,
-                        }))
-                    })
-                    .flatten()
-                    .chain(
-                        tile.below
-                            .into_iter()
-                            .map(move |second| {
-                                iter::once(Rule {
-                                    origin,
-                                    second,
-                                    direction: Direction::Down,
-                                })
-                                .chain(iter::once(Rule {
-                                    origin: second,
-                                    second: origin,
-                                    direction: Direction::Up,
-                                }))
-                            })
-                            .flatten(),
-                    )
-                    .chain(
-                        tile.left
-                            .into_iter()
-                            .map(move |second| {
-                                iter::once(Rule {
-                                    origin,
-                                    second,
-                                    direction: Direction::Left,
-                                })
-                                .chain(iter::once(Rule {
-                                    origin: second,
-                                    second: origin,
-                                    direction: Direction::Right,
-                                }))
-                            })
-                            .flatten(),
-                    )
-                    .chain(
-                        tile.right
-                            .into_iter()
-                            .map(move |second| {
-                                iter::once(Rule {
-                                    origin,
-                                    second,
-                                    direction: Direction::Right,
-                                })
-                                .chain(iter::once(Rule {
-                                    origin: second,
-                                    second: origin,
-                                    direction: Direction::Left,
-                                }))
-                            })
-                            .flatten(),
-                    )
-            })
-            .flatten()
-            .map(|mut rule| {
-                if rule.origin == 0 {
-                    rule.origin = 1;
-                }
-                if rule.second == 0 {
-                    rule.second = 0;
-                }
-                rule
-            })
-            .collect();
-        inside.sort_unstable();
-        inside.dedup();
-        inside.shrink_to_fit();
-        Rules(inside)
+    pub fn new<I: IntoIterator<Item=[TileID; 9]>>(patterns: I) -> Self {
+        let mut list: Vec<_> = patterns.into_iter().map(|pattern| Rule::new(pattern)).collect();
+        list.sort();
+        list.dedup();
+        list.shrink_to_fit();
+        Rules(list)
     }
-    /// Get a superposition of all posible tiles
-    pub fn complete_superposition(&self) -> SuperTile {
-        let mut inside: Vec<_> = self.0.iter().map(|r| r.origin).collect();
-        inside.sort();
-        inside.dedup();
-        inside.shrink_to_fit();
-        SuperTile(inside)
+    pub fn rules_for(&self, center: TileID) -> &[Rule] {
+        let start = match self.0.binary_search(&Rule{
+            center,
+            around: [TileID::MIN; 8]
+        }) {
+            Ok(i) => i,
+            Err(i) => i
+        };
+        match self.0.binary_search(&Rule{
+            center,
+            around: [TileID::MAX; 8]
+        }) {
+            Ok(i) => &self.0[start..=i],
+            Err(i) => &self.0[start..i]
+        }
     }
 }
 impl Deref for Rules {
@@ -148,48 +79,4 @@ impl Deref for Rules {
     fn deref(&self) -> &Self::Target {
         &self.0
     }
-}
-
-fn rules_between(rules: &[Rule], range: Range<Rule>) -> &[Rule] {
-    let bottom = match rules.binary_search(&range.start) {
-        Ok(n) => n,
-        Err(n) => n,
-    };
-    match rules.binary_search(&range.end) {
-        Ok(n) => &rules[bottom..=n],
-        Err(n) => &rules[bottom..n],
-    }
-}
-
-pub fn relevant_rules(origin: TileID, rules: &[Rule]) -> &[Rule] {
-    let direction = match rules.first() {
-        Some(r) => r.direction,
-        None => return &[],
-    };
-    rules_between(
-        rules,
-        Rule {
-            direction,
-            origin,
-            second: 0,
-        }..Rule {
-            direction,
-            origin,
-            second: TileID::MAX,
-        },
-    )
-}
-pub fn direction_rules(rules: &[Rule], direction: Direction) -> &[Rule] {
-    rules_between(
-        rules,
-        Rule {
-            direction,
-            origin: 0,
-            second: 0,
-        }..Rule {
-            direction,
-            origin: TileID::MAX,
-            second: TileID::MAX,
-        },
-    )
 }
