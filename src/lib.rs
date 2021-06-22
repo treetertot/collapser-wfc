@@ -25,7 +25,7 @@ mod tests {
                 1, 2, 1
             ],
         ];
-        let rules = crate::rules::Rules::new(patterns);
+        let rules = crate::rules::Rules::new(patterns.into_iter().map(|pattern| (pattern, 1)));
         let mut world = crate::World::new(rules, [0, 0]..[2, 2]);
         for x in 0..2 {
             for y in 0..2 {
