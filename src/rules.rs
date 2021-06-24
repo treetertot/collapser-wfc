@@ -16,19 +16,6 @@ impl Rule {
             score
         }
     }
-    pub fn eval(&self, neighbors: &[&[TileID]; 8]) -> bool {
-        self
-            .around
-            .iter()
-            .zip(neighbors)
-            .filter(|(_, n)| n.len() > 0)
-            .all(|(target, list)| list.binary_search(target).is_ok())
-    }
-    pub fn score_eval(&self,  neighbors: &[&[TileID]; 8]) -> i32 {
-        self.eval(neighbors)
-            .then(|| self.score)
-            .unwrap_or(0)
-    }
 }
 #[test]
 fn construct() {
@@ -38,19 +25,6 @@ fn construct() {
         7, 8, 9
     ];
     assert_eq!(Rule::new(pattern, 1), Rule{center: 5, around: [7, 8, 9, 6, 3, 2, 1, 4], score: 1})
-}
-#[test]
-fn matching() {
-    let pattern = [
-        1, 2, 3,
-        4, 5, 6,
-        7, 8, 9
-    ];
-    let rule = Rule::new(pattern, 1);
-    let ns = [&[7][..], &[8], &[9], &[6], &[3], &[2], &[1], &[4]];
-    assert!(rule.eval(&ns));
-    let ns = [&[7][..], &[8], &[9], &[6], &[3], &[2], &[1], &[5]];
-    assert!(!rule.eval(&ns));
 }
 
 #[derive(Debug, Clone)]
@@ -81,6 +55,12 @@ impl Rules {
             Err(i) => &self.0[start..i]
         }
     }
+    pub fn score(&self, centers: &[TileID], score_outs: &mut [i32], neighbors: &[&[TileID]; 8]) {
+        for (center, score_out) in centers.iter().zip(score_outs) {
+            let relevant = self.rules_for(*center);
+            *score_out = score_rules(relevant, neighbors);
+        }
+    }
 }
 impl Deref for Rules {
     type Target = [Rule];
@@ -89,3 +69,88 @@ impl Deref for Rules {
         &self.0
     }
 }
+
+fn score_rules(rules: &[Rule], neighbors: &[&[TileID]; 8]) -> i32 {
+    let mut indexes = [0usize; 8];
+    let mut sum = 0;
+    for rule in rules {
+        let mut matched = true;
+        for ((pattern, options), idx) in rule.around.iter().zip(neighbors).zip(&mut indexes) {
+            match options.get(*idx) {
+                Some(n) if n == pattern => (),
+                // item at index is too high
+                Some(n) if n > pattern => {
+                    let searchable = &options[..*idx];
+                    match searchable.binary_search(pattern) {
+                        Ok(i) => *idx = i,
+                        Err(i) => {
+                            *idx = i;
+                            matched = false;
+                            break
+                        }
+                    }
+                },
+                // item at index is too low
+                Some(n) => {
+                    let mut n = *n;
+                    while n < *pattern {
+                        *idx += 1;
+                        match options.get(*idx) {
+                            Some(&new_n) => n = new_n,
+                            None => break
+                        }
+                    }
+                    if n != *pattern {
+                        matched = false;
+                        break
+                    }
+                },
+                None => ()
+            }
+        }
+        if matched {
+            sum += rule.score;
+        }
+    }
+    sum
+}
+
+#[test]
+fn score_test() {
+    // I'd just use an array but rust analyzer gets mad
+    let patterns = vec![
+        (
+            [
+                1, 1, 1,
+                1, 1, 1,
+                1, 1, 1
+            ],
+            1
+        ),
+        (
+            [
+                1, 1, 1,
+                1, 1, 1,
+                1, 1, 2
+            ],
+            2
+        ),
+        (
+            [
+                1, 1, 2,
+                1, 1, 1,
+                1, 1, 1
+            ],
+            3
+        ),
+    ];
+    let rules = Rules::new(patterns);
+    let pattern = [
+        &[1u16][..], &[1], &[1, 2],
+        &[1], &[1], &[1],
+        &[1], &[1], &[1]
+    ];
+    let neighbors = [pattern[6], pattern[7], pattern[8], pattern[5], pattern[2], pattern[1], pattern[0], pattern[3]];
+    assert_eq!(score_rules(&rules, &neighbors), 4)
+}
+

@@ -58,16 +58,7 @@ impl Working for SuperTile {
             iter.next().unwrap(),
             iter.next().unwrap()
         ];
-        let start_len = self.ids.len();
-        self.ids.retain(|&n| {
-            let sub_rules = rules.rules_for(n);
-            sub_rules.iter()
-                .any(|r| r.eval(&neighbors))
-        });
-        for (id, w_out) in self.ids.iter().zip(&mut self.scores.0) {
-            let relevant = rules.rules_for(*id);
-            *w_out = relevant.iter().map(|r| r.score_eval(&neighbors)).sum();
-        }
+        rules.score(&self.ids, &mut self.scores.0, &neighbors);
         let mut rmed = 0;
         for i in 0..self.scores.0.len() {
             if self.ids.len() == 0 {
@@ -82,7 +73,7 @@ impl Working for SuperTile {
         }
         match self.ids.len() {
             0 | 1 => Ok(self.ids.pop().unwrap_or(0)),
-            n => Err(n != start_len)
+            _n => Err(rmed > 0)
         }
     }
     fn force_collapse(&self) -> Self::Tile {
