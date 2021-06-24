@@ -6,10 +6,10 @@ use std::ops::Deref;
 pub struct Rule {
     pub center: TileID,
     pub around: [TileID; 8],
-    pub score: i32,
+    pub score: u32,
 }
 impl Rule {
-    pub fn new(pattern: [TileID; 9], score: i32) -> Self {
+    pub fn new(pattern: [TileID; 9], score: u32) -> Self {
         Rule {
             center: pattern[4],
             around: [pattern[6], pattern[7], pattern[8], pattern[5], pattern[2], pattern[1], pattern[0], pattern[3]],
@@ -30,7 +30,7 @@ fn construct() {
 #[derive(Debug, Clone)]
 pub struct Rules(Vec<Rule>);
 impl Rules {
-    pub fn new<I: IntoIterator<Item=([TileID; 9], i32)>>(patterns: I) -> Self {
+    pub fn new<I: IntoIterator<Item=([TileID; 9], u32)>>(patterns: I) -> Self {
         let mut list: Vec<_> = patterns.into_iter().map(|(pattern, score)| Rule::new(pattern, score)).collect();
         list.sort();
         list.dedup();
@@ -49,13 +49,13 @@ impl Rules {
         match self.0.binary_search(&Rule{
             center,
             around: [TileID::MAX; 8],
-            score: i32::MAX
+            score: u32::MAX
         }) {
             Ok(i) => &self.0[start..=i],
             Err(i) => &self.0[start..i]
         }
     }
-    pub fn score(&self, centers: &[TileID], score_outs: &mut [i32], neighbors: &[&[TileID]; 8]) {
+    pub fn score(&self, centers: &[TileID], score_outs: &mut [u32], neighbors: &[&[TileID]; 8]) {
         for (center, score_out) in centers.iter().zip(score_outs) {
             let relevant = self.rules_for(*center);
             *score_out = score_rules(relevant, neighbors);
@@ -70,7 +70,7 @@ impl Deref for Rules {
     }
 }
 
-fn score_rules(rules: &[Rule], neighbors: &[&[TileID]; 8]) -> i32 {
+fn score_rules(rules: &[Rule], neighbors: &[&[TileID]; 8]) -> u32 {
     let mut indexes = [0usize; 8];
     let mut sum = 0;
     for rule in rules {

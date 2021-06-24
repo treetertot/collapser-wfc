@@ -84,7 +84,7 @@ impl Working for SuperTile {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct Weighted(Vec<i32>);
+pub struct Weighted(Vec<u32>);
 impl Weighted {
     fn count<I: IntoIterator<Item=TileID>>(iter: I) -> (Vec<u16>, Self) {
         let mut last = TileID::MAX;
@@ -98,7 +98,7 @@ impl Weighted {
                     l_idx = i;
                     let l = last;
                     last = n;
-                    Some((l, (i - li) as i32))
+                    Some((l, (i - li) as u32))
                 },
                 false => None
             });
@@ -107,16 +107,17 @@ impl Weighted {
             .unzip();
         (ids, Weighted(weights))
     }
-    fn choose(&self, mut n: i32) -> Option<usize> {
+    fn choose(&self, n: u32) -> Option<usize> {
+        let mut n = n as i32;
         for (i, x) in self.0.iter().enumerate() {
-            n -= x;
+            n -= *x as i32;
             if n <= 0 {
                 return Some(i)
             }
         }
         None
     }
-    fn sum(&self) -> i32 {
+    fn sum(&self) -> u32 {
         self.0.iter().sum()
     }
     fn choose_rand(&self) -> Option<usize> {
