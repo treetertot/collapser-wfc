@@ -98,7 +98,7 @@ impl Weighted {
     fn count<I: IntoIterator<Item=TileID>>(iter: I) -> (Vec<u16>, Self) {
         let mut last = TileID::MAX;
         let mut l_idx = 0;
-        let (ids, weights) = iter.into_iter()
+        let mut iter = iter.into_iter()
             .chain(once(TileID::MAX))
             .enumerate()
             .filter_map(|(i, n)| match last != n {
@@ -110,7 +110,9 @@ impl Weighted {
                     Some((l, (i - li) as i32))
                 },
                 false => None
-            })
+            });
+        iter.next();
+        let (ids, weights) = iter
             .unzip();
         (ids, Weighted(weights))
     }

@@ -5,9 +5,9 @@ mod tests {
         // could just be an array but rust analyzer gets mad at me
         let patterns = vec![
             [
-                4, 2, 4,
+                4, 3, 4,
                 2, 1, 2,
-                4, 2, 4
+                4, 3, 4
             ],
             [
                 3, 4, 3,
@@ -34,6 +34,12 @@ mod tests {
         }
         let result = [world.read(0, 0), world.read(1, 0), world.read(0, 1), world.read(1, 1)];
         assert!(result[0] != result[1] && result[1] != result[2] && result[2] != result[3]);
+        println!("{:?}", result);
+        assert!(result.iter().all(|o| match o {
+            Ok(0) => false,
+            Ok(_) => true,
+            _ => false
+        }));
     }
 }
 
